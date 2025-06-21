@@ -1,58 +1,101 @@
 # Guia de Integração - Endpoints de Emergência
 
-Este documento descreve o funcionamento detalhado dos endpoints de emergência para integração com aplicativos móveis e sistemas externos.
+Este documento descreve o funcionamento detalhado dos endpoints de emergência para integração com o aplicativo **E.L.A. Background**.
 
-## Endpoints Documentados
+## URL Base do Servidor
 
-1. **POST /emergency/update-location** - Atualização de localização durante chamado ativo
-2. **GET /emergency/nfc/auto/<token>** - Criação automática de emergência via token NFC
+Todas as rotas descritas abaixo são relativas à seguinte URL base:
+
+**`https://dcff-74-249-85-192.ngrok-free.app`**
 
 ---
 
-## 1. POST /emergency/update-location
+## Endpoints Documentados
+
+1. **POST /emergency/nfc/auto** - Criação de emergência via token NFC.
+2. **POST /emergency/update-location** - Atualização de localização durante chamado ativo.
+
+---
+
+## 1. POST /emergency/nfc/auto
 
 ### Descrição
-Atualiza a localização do usuário durante um chamado de emergência ativo. Este endpoint é fundamental para o rastreamento em tempo real da vítima.
+Cria um chamado de emergência. Este é o primeiro endpoint a ser chamado quando uma tag NFC é lida pelo aplicativo.
 
-### URL Base
-```
-POST /emergency/update-location
-```
+### URL
+`POST /emergency/nfc/auto`
 
 ### Headers
-```
-Content-Type: application/json
-```
+`Content-Type: application/json`
 
 ### Parâmetros do Corpo (JSON)
 
 | Campo | Tipo | Obrigatório | Descrição |
-|-------|------|-------------|-----------|
-| `token_nfc` | string | ✅ | Token NFC único do usuário |
-| `latitude` | float | ✅ | Latitude da localização atual |
-| `longitude` | float | ✅ | Longitude da localização atual |
+|---|---|---|---|
+| `token_nfc` | string | ✅ | Token NFC único do usuário, lido da tag. |
+| `latitude` | float | ✅ | Latitude da localização inicial. |
+| `longitude` | float | ✅ | Longitude da localização inicial. |
 
 ### Exemplo de Requisição
-
 ```json
 {
-  "token_nfc": "abc123def456",
+  "token_nfc": "tokendouser123",
+  "latitude": -23.5505,
+  "longitude": -46.6333
+}
+```
+
+### Resposta de Sucesso (201)
+```json
+{
+  "success": true,
+  "call_id": 124,
+  "message": "Chamado de emergência criado e SMS enviados com sucesso"
+}
+```
+
+---
+
+## 2. POST /emergency/update-location
+
+### Descrição
+Atualiza a localização do usuário durante um chamado de emergência ativo. Este endpoint é chamado repetidamente pelo aplicativo para o rastreamento em tempo real.
+
+### URL
+`POST /emergency/update-location`
+
+### Headers
+`Content-Type: application/json`
+
+### Parâmetros do Corpo (JSON)
+
+| Campo | Tipo | Obrigatório | Descrição |
+|---|---|---|---|
+| `token_nfc` | string | ✅ | Token NFC único do usuário. |
+| `latitude` | float | ✅ | Latitude da localização atual. |
+| `longitude` | float | ✅ | Longitude da localização atual. |
+
+### Exemplo de Requisição
+```json
+{
+  "token_nfc": "tokendouser123",
   "latitude": -23.5505,
   "longitude": -46.6333
 }
 ```
 
 ### Resposta de Sucesso (200)
-
 ```json
 {
-  "message": "Localização atualizada com sucesso",
-  "call_id": 123,
-  "route_length": 5,
-  "current_location": {
-    "lat": -23.5505,
-    "lng": -46.6333
-  }
+  "message": "Localização atualizada com sucesso"
+}
+```
+
+### Resposta de Erro (400)
+Se o backend retornar um status 400, significa que o chamado de emergência foi encerrado ou não existe mais. O aplicativo interpreta esta resposta como um sinal para **parar o compartilhamento de localização**.
+```json
+{
+  "error": "Não há chamado ativo para este usuário"
 }
 ```
 
@@ -88,13 +131,6 @@ Content-Type: application/json
 }
 ```
 
-#### 400 - Sem Chamado Ativo
-```json
-{
-  "error": "Não há chamado ativo para este usuário"
-}
-```
-
 #### 500 - Erro Interno
 ```json
 {
@@ -108,115 +144,6 @@ Content-Type: application/json
 - **Deduplicação**: Localizações idênticas consecutivas não são duplicadas no histórico
 - **Validação**: Coordenadas são validadas como números válidos
 - **Persistência**: Localização atual é sempre atualizada, mesmo se for idêntica à anterior
-
----
-
-## 2. GET /emergency/nfc/auto/<token>
-
-### Descrição
-Cria automaticamente um chamado de emergência ao receber um token NFC válido. Opcionalmente aceita coordenadas iniciais e envia SMS para todos os contatos de emergência cadastrados.
-
-### URL Base
-```
-GET /emergency/nfc/auto/{token}
-```
-
-### Parâmetros de Query (Opcionais)
-
-| Parâmetro | Tipo | Obrigatório | Descrição |
-|-----------|------|-------------|-----------|
-| `lat` | float | ❌ | Latitude da localização inicial |
-| `lng` | float | ❌ | Longitude da localização inicial |
-
-### Exemplos de URL
-
-#### Sem coordenadas
-```
-GET /emergency/nfc/auto/abc123def456
-```
-
-#### Com coordenadas
-```
-GET /emergency/nfc/auto/abc123def456?lat=-23.5505&lng=-46.6333
-```
-
-### Resposta de Sucesso (201)
-
-```json
-{
-  "success": true,
-  "call_id": 124,
-  "message": "Chamado de emergência criado e SMS enviados com sucesso"
-}
-```
-
-### Resposta com Erros de SMS (201)
-
-```json
-{
-  "success": false,
-  "call_id": 124,
-  "message": "Chamado criado mas houve erros no envio de SMS",
-  "sms_errors": [
-    "Erro ao enviar SMS para +5511999999999: [detalhes do erro]"
-  ]
-}
-```
-
-### Campos da Resposta
-
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| `success` | boolean | Indica se a operação foi bem-sucedida |
-| `call_id` | integer | ID do chamado de emergência criado |
-| `message` | string | Mensagem descritiva do resultado |
-| `sms_errors` | array | Lista de erros no envio de SMS (apenas se houver falhas) |
-
-### Códigos de Erro
-
-#### 404 - Token Inválido
-```json
-{
-  "success": false,
-  "error": "Token NFC inválido"
-}
-```
-
-#### 400 - Chamado Já Ativo
-```json
-{
-  "success": false,
-  "error": "Já existe um chamado ativo para este usuário"
-}
-```
-
-#### 400 - Coordenadas Inválidas
-```json
-{
-  "error": "Latitude e longitude devem ser números válidos"
-}
-```
-
-#### 500 - Erro Interno
-```json
-{
-  "success": false,
-  "error": "Erro ao criar chamado: [detalhes do erro]"
-}
-```
-
-### Funcionalidades Automáticas
-
-1. **Criação do Chamado**: Cria automaticamente um chamado com status "Ativo"
-2. **Localização Inicial**: Salva as coordenadas fornecidas como ponto inicial da rota
-3. **Envio de SMS**: Envia notificação para todos os contatos de emergência cadastrados
-4. **Link de Acompanhamento**: Cada SMS contém um link único para acompanhar o chamado
-
-### Formato do SMS Enviado
-
-```
-ALERTA! [Nome do Usuário] precisa de ajuda. Acesse: https://8b18-190-103-168-170.ngrok-free.app/{token}/{call_id}
-```
 
 ---
 
