@@ -6,7 +6,6 @@ import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../models/emergency_response.dart';
 import 'location_service.dart';
 
 class EmergencyService {
@@ -14,10 +13,12 @@ class EmergencyService {
   static const String _baseUrl = 'https://dcff-74-249-85-192.ngrok-free.app';
   static const String _createEmergencyEndpoint = '/emergency/nfc/auto';
   static const String _updateLocationEndpoint = '/emergency/update-location';
-  
+
   // Platform channel para comunicação com serviço Kotlin
-  static const MethodChannel _channel = MethodChannel('emergency_service_channel');
-  
+  static const MethodChannel _channel = MethodChannel(
+    'emergency_service_channel',
+  );
+
   final LocationService _locationService = LocationService();
   Timer? _locationUpdateTimer;
   bool _isLocationSharing = false;
@@ -70,7 +71,9 @@ class EmergencyService {
   // Verificar se o serviço Kotlin está rodando
   Future<bool> isKotlinServiceRunning() async {
     try {
-      final isRunning = await _channel.invokeMethod('isEmergencyServiceRunning');
+      final isRunning = await _channel.invokeMethod(
+        'isEmergencyServiceRunning',
+      );
       return isRunning ?? false;
     } catch (e) {
       debugPrint('Emergency Service: Erro ao verificar serviço Kotlin: $e');
@@ -79,18 +82,27 @@ class EmergencyService {
   }
 
   // Criar chamado de emergência
-  Future<int?> createEmergencyCall(String token, double latitude, double longitude) async {
+  Future<int?> createEmergencyCall(
+    String token,
+    double latitude,
+    double longitude,
+  ) async {
     try {
       debugPrint('Emergency Service: Criando chamado de emergência');
-      String url = '$_baseUrl$_createEmergencyEndpoint/$token?lat=$latitude&lng=$longitude';
-      final response = await http.get(
-        Uri.parse(url),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-      ).timeout(const Duration(seconds: 10));
-      debugPrint('Emergency Service: Resposta do servidor - \\${response.statusCode}');
+      String url =
+          '$_baseUrl$_createEmergencyEndpoint/$token?lat=$latitude&lng=$longitude';
+      final response = await http
+          .get(
+            Uri.parse(url),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 10));
+      debugPrint(
+        'Emergency Service: Resposta do servidor - \\${response.statusCode}',
+      );
       if (response.statusCode == 201) {
         final data = json.decode(response.body);
         _currentCallId = data['call_id'];
@@ -98,7 +110,9 @@ class EmergencyService {
         await _saveStoredData();
         return _currentCallId;
       } else {
-        debugPrint('Emergency Service: Erro ao criar chamado - \\${response.statusCode}');
+        debugPrint(
+          'Emergency Service: Erro ao criar chamado - \\${response.statusCode}',
+        );
         return null;
       }
     } catch (e) {
@@ -108,25 +122,33 @@ class EmergencyService {
   }
 
   // Atualizar localização
-  Future<void> updateLocation(String token, double latitude, double longitude) async {
+  Future<void> updateLocation(
+    String token,
+    double latitude,
+    double longitude,
+  ) async {
     try {
       final data = {
         'token_nfc': token,
         'latitude': latitude,
         'longitude': longitude,
       };
-      final response = await http.post(
-        Uri.parse('$_baseUrl$_updateLocationEndpoint'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: json.encode(data),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl$_updateLocationEndpoint'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: json.encode(data),
+          )
+          .timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         debugPrint('Emergency Service: Localização atualizada com sucesso');
       } else {
-        debugPrint('Emergency Service: Erro ao atualizar localização - \\${response.statusCode}');
+        debugPrint(
+          'Emergency Service: Erro ao atualizar localização - \\${response.statusCode}',
+        );
         if (response.statusCode == 400) {
           stopLocationSharing();
         }
@@ -170,7 +192,9 @@ class EmergencyService {
   }
 
   Future<void> _sendLocationUpdate() async {
-    if (!_isLocationSharing || _currentToken == null || _currentCallId == null) {
+    if (!_isLocationSharing ||
+        _currentToken == null ||
+        _currentCallId == null) {
       return;
     }
 
@@ -190,29 +214,39 @@ class EmergencyService {
       };
 
       // Fazer requisição
-      final response = await http.post(
-        Uri.parse('$_baseUrl$_updateLocationEndpoint'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: json.encode(data),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl$_updateLocationEndpoint'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: json.encode(data),
+          )
+          .timeout(const Duration(seconds: 10));
 
-      debugPrint('Emergency Service: Localização enviada - ${response.statusCode}');
+      debugPrint(
+        'Emergency Service: Localização enviada - ${response.statusCode}',
+      );
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
-        debugPrint('Emergency Service: Localização atualizada - Call ID: ${responseData['call_id']}');
+        debugPrint(
+          'Emergency Service: Localização atualizada - Call ID: ${responseData['call_id']}',
+        );
       } else if (response.statusCode == 400) {
-        debugPrint('Emergency Service: Erro 400 - Parando compartilhamento de localização');
+        debugPrint(
+          'Emergency Service: Erro 400 - Parando compartilhamento de localização',
+        );
         stopLocationSharing();
-        
+
         // Limpar dados do chamado
         _currentCallId = null;
         await _saveStoredData();
       } else {
-        debugPrint('Emergency Service: Erro ao enviar localização: ${response.statusCode}');
+        debugPrint(
+          'Emergency Service: Erro ao enviar localização: ${response.statusCode}',
+        );
       }
     } catch (e) {
       debugPrint('Emergency Service: Erro ao enviar localização: $e');
@@ -222,10 +256,10 @@ class EmergencyService {
   // Cancelar emergência
   Future<void> cancelEmergency() async {
     debugPrint('Emergency Service: Cancelando emergência');
-    
+
     stopLocationSharing();
     await stopKotlinService();
-    
+
     _currentCallId = null;
     await _saveStoredData();
   }
@@ -251,10 +285,12 @@ class EmergencyService {
   // Testar conectividade com o servidor
   Future<bool> testServerConnection() async {
     try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/health'),
-        headers: {'Accept': 'application/json'},
-      ).timeout(const Duration(seconds: 5));
+      final response = await http
+          .get(
+            Uri.parse('$_baseUrl/health'),
+            headers: {'Accept': 'application/json'},
+          )
+          .timeout(const Duration(seconds: 5));
 
       return response.statusCode == 200;
     } catch (e) {
@@ -270,4 +306,4 @@ class EmergencyService {
     stopLocationSharing();
     _locationUpdateTimer?.cancel();
   }
-} 
+}

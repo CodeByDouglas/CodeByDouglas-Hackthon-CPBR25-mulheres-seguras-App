@@ -7,16 +7,14 @@ import '../services/location_service.dart';
 import '../services/emergency_service.dart';
 
 class NfcService {
-  static const String _emergencyTokenPrefix = "token_nfc = ";
-  
   bool _isInitialized = false;
   bool _isMonitoring = false;
-  
+
   // Serviços para integração
   NotificationService? _notificationService;
   LocationService? _locationService;
   EmergencyService? _emergencyService;
-  
+
   // Para desenvolvimento - simular detecção
   Timer? _simulationTimer;
 
@@ -26,7 +24,7 @@ class NfcService {
     try {
       // Verificar se NFC está disponível
       bool isAvailable = await NfcManager.instance.isAvailable();
-      
+
       if (isAvailable) {
         _isInitialized = true;
         debugPrint('NFC Service: Inicializado com sucesso');
@@ -79,7 +77,7 @@ class NfcService {
   Future<void> _handleNfcTag(NfcTag tag) async {
     try {
       debugPrint('NFC Service: Tag detectada');
-      
+
       // Tentar ler dados NDEF
       Ndef? ndef = Ndef.from(tag);
       if (ndef == null) {
@@ -99,13 +97,16 @@ class NfcService {
 
       for (NdefRecord record in records) {
         // Verificar se é um record de texto
-        if (record.type.length == 1 && record.type[0] == 0x54) { // 'T' record
-          
+        if (record.type.length == 1 && record.type[0] == 0x54) {
+          // 'T' record
+
           String payload = String.fromCharCodes(record.payload);
           debugPrint('NFC Service: Payload encontrado: $payload');
-          
+
           // Extrair token usando regex
-          final tokenMatch = RegExp(r'token_nfc\s*=\s*([\w\d]+)').firstMatch(payload);
+          final tokenMatch = RegExp(
+            r'token_nfc\s*=\s*([\w\d]+)',
+          ).firstMatch(payload);
           if (tokenMatch != null) {
             final token = tokenMatch.group(1)!;
             debugPrint('NFC Service: Token de emergência detectado: $token');
@@ -120,7 +121,9 @@ class NfcService {
   }
 
   Future<void> _triggerEmergencyFlow(String token) async {
-    if (_notificationService == null || _locationService == null || _emergencyService == null) {
+    if (_notificationService == null ||
+        _locationService == null ||
+        _emergencyService == null) {
       debugPrint('NFC Service: Serviços não inicializados');
       return;
     }
@@ -128,14 +131,14 @@ class NfcService {
     try {
       // Obter localização atual
       final position = await _locationService!.getCurrentLocation();
-      
+
       // Criar chamado de emergência no backend
       final callId = await _emergencyService!.createEmergencyCall(
         token,
         position?.latitude ?? -23.5505,
         position?.longitude ?? -46.6333,
       );
-      
+
       if (callId != null) {
         // Mostrar notificação interativa com contador
         await _notificationService!.showEmergencyNotificationWithTimer(
@@ -155,14 +158,14 @@ class NfcService {
   // Método para simulação (apenas desenvolvimento)
   void simulateNfcDetection() {
     if (!kDebugMode) return;
-    
+
     debugPrint('NFC Service: Simulando detecção de NFC');
     _triggerEmergencyFlow('tokendouser123');
   }
 
   void _startSimulation() {
     if (!kDebugMode) return;
-    
+
     // Simular detecção a cada 30 segundos para teste
     _simulationTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       if (_isMonitoring) {
@@ -196,4 +199,4 @@ class NfcService {
     stopBackgroundMonitoring();
     _simulationTimer?.cancel();
   }
-} 
+}

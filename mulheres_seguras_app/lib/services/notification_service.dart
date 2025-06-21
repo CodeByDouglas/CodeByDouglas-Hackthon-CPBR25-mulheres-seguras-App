@@ -6,69 +6,64 @@ import 'package:permission_handler/permission_handler.dart';
 import '../services/location_service.dart';
 import '../services/emergency_service.dart';
 
+@pragma('vm:entry-point')
+void onDidReceiveBackgroundNotificationResponse(NotificationResponse response) {
+  // Esta função precisa existir, mas a lógica será tratada dentro do serviço
+  // usando uma abordagem diferente para evitar problemas de contexto.
+}
+
 class NotificationService {
   static const String _channelId = 'emergency_channel';
   static const String _channelName = 'Emergências';
-  static const String _channelDescription = 'Canal para notificações de emergência';
-  
-  final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
+  static const String _channelDescription =
+      'Canal para notificações de emergência';
+
+  final FlutterLocalNotificationsPlugin _notifications =
+      FlutterLocalNotificationsPlugin();
   bool _isInitialized = false;
   Timer? _timeoutTimer;
   Timer? _countdownTimer;
   int _currentCountdown = 60;
+  bool _actionTaken = false; // <-- Variável de bloqueio
+
+  // Variáveis para armazenar contexto
+  int? _currentCallId;
+  String? _currentToken;
+  LocationService? _locationService;
+  EmergencyService? _emergencyService;
 
   Future<void> initialize() async {
     if (_isInitialized) return;
-
     try {
-      // Configuração para Android
       const AndroidInitializationSettings initializationSettingsAndroid =
           AndroidInitializationSettings('@mipmap/ic_launcher');
 
       const InitializationSettings initializationSettings =
           InitializationSettings(android: initializationSettingsAndroid);
 
-      // Inicializar plugin
       await _notifications.initialize(
         initializationSettings,
         onDidReceiveNotificationResponse: _onNotificationTapped,
-        onDidReceiveBackgroundNotificationResponse: _onBackgroundNotificationTapped,
+        onDidReceiveBackgroundNotificationResponse:
+            onDidReceiveBackgroundNotificationResponse,
       );
-
-      // Criar canal de notificação para Android
-      await _createNotificationChannel();
-
       _isInitialized = true;
-      debugPrint('Notification Service: Inicializado com sucesso');
     } catch (e) {
       debugPrint('Notification Service: Erro na inicialização: $e');
     }
-  }
-
-  Future<void> _createNotificationChannel() async {
-    const AndroidNotificationChannel channel = AndroidNotificationChannel(
-      _channelId,
-      _channelName,
-      description: _channelDescription,
-      importance: Importance.max,
-      playSound: true,
-      enableVibration: true,
-      enableLights: true,
-      showBadge: true,
-    );
-
-    await _notifications
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
   }
 
   // Verificar se o serviço está disponível
   Future<bool> isAvailable() async {
     try {
       // Verificar se as notificações estão habilitadas
-      final androidPlugin = _notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      final androidPlugin = _notifications
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
       if (androidPlugin != null) {
-        final areNotificationsEnabled = await androidPlugin.areNotificationsEnabled();
+        final areNotificationsEnabled = await androidPlugin
+            .areNotificationsEnabled();
         return areNotificationsEnabled ?? false;
       }
       return false;
@@ -103,31 +98,26 @@ class NotificationService {
       // Cancelar notificação anterior se existir
       await _notifications.cancel(0);
 
-      // Armazenar contexto da emergência atual
+      // Armazenar contexto para uso posterior
       _currentCallId = callId;
       _currentToken = token;
-      _currentLocationService = locationService;
-      _currentEmergencyService = emergencyService;
-
-      // Resetar contador
+      _locationService = locationService;
+      _emergencyService = emergencyService;
+      _actionTaken = false; // Resetar o bloqueio
       _currentCountdown = 60;
 
-      // Mostrar notificação inicial
-      await _updateNotificationWithCountdown(callId);
+      await _updateNotificationWithCountdown();
+      _startTimers();
 
-      // Iniciar contador
-      _startCountdownTimer(callId, token, locationService, emergencyService);
-
-      // Iniciar timer de timeout (60 segundos)
-      _startTimeoutTimer(callId, token, locationService, emergencyService);
-
-      debugPrint('Notification Service: Notificação de emergência com contador exibida');
+      debugPrint(
+        'Notification Service: Notificação de emergência com contador exibida',
+      );
     } catch (e) {
       debugPrint('Notification Service: Erro ao mostrar notificação: $e');
     }
   }
 
-  Future<void> _updateNotificationWithCountdown(int callId) async {
+  Future<void> _updateNotificationWithCountdown() async {
     await _notifications.show(
       0, // ID da notificação
       '🚨 EMERGÊNCIA - ${_currentCountdown}s',
@@ -139,23 +129,23 @@ class NotificationService {
           channelDescription: _channelDescription,
           importance: Importance.max,
           priority: Priority.high,
-          fullScreenIntent: true, // Mostrar mesmo com tela bloqueada
+          fullScreenIntent: true,
           category: AndroidNotificationCategory.alarm,
           actions: [
             const AndroidNotificationAction(
               'ACTION_CONFIRM',
               'Confirmar',
               showsUserInterface: false,
-              cancelNotification: true,
+              cancelNotification: true, // Deixar a biblioteca tentar fechar
             ),
             const AndroidNotificationAction(
               'ACTION_CANCEL',
               'Cancelar',
               showsUserInterface: false,
-              cancelNotification: true,
+              cancelNotification: true, // Deixar a biblioteca tentar fechar
             ),
           ],
-          ongoing: true, // Não pode ser removida pelo usuário
+          ongoing: true,
           autoCancel: false,
         ),
       ),
@@ -163,101 +153,79 @@ class NotificationService {
     );
   }
 
-  void _startCountdownTimer(int callId, String token, LocationService locationService, EmergencyService emergencyService) {
+  void _startTimers() {
     _countdownTimer?.cancel();
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      _currentCountdown--;
-      
       if (_currentCountdown > 0) {
-        // Atualizar notificação com novo contador
-        _updateNotificationWithCountdown(callId);
+        _currentCountdown--;
+        _updateNotificationWithCountdown();
       } else {
-        // Contador chegou a zero - confirmar automaticamente
-        timer.cancel();
-        _confirmEmergency(callId, token, locationService, emergencyService);
+        handleAction('ACTION_CONFIRM');
       }
     });
-  }
 
-  void _startTimeoutTimer(int callId, String token, LocationService locationService, EmergencyService emergencyService) {
     _timeoutTimer?.cancel();
     _timeoutTimer = Timer(const Duration(seconds: 60), () {
-      debugPrint('Notification Service: Timeout - confirmando emergência automaticamente');
-      _confirmEmergency(callId, token, locationService, emergencyService);
+      handleAction('ACTION_CONFIRM');
     });
   }
 
   void _onNotificationTapped(NotificationResponse response) {
-    _handleNotificationAction(response.actionId);
+    handleAction(response.actionId);
   }
 
-  // Callback para notificações em background
-  @pragma('vm:entry-point')
-  static void _onBackgroundNotificationTapped(NotificationResponse response) {
-    // Em background, sempre confirmar a emergência
-    debugPrint('Notification Service: Notificação em background - confirmando emergência');
-  }
+  Future<void> handleAction(String? actionId) async {
+    if (_actionTaken) return; // Se a ação já foi tomada, ignora.
+    _actionTaken = true; // Trava para evitar execuções múltiplas.
 
-  void _handleNotificationAction(String? actionId) {
-    _timeoutTimer?.cancel();
     _countdownTimer?.cancel();
+    _timeoutTimer?.cancel();
+    await _notifications.cancel(0); // Força o fechamento da notificação
 
     switch (actionId) {
       case 'ACTION_CONFIRM':
-        debugPrint('Notification Service: Usuário confirmou emergência');
-        _confirmEmergency(_currentCallId!, _currentToken!, _currentLocationService!, _currentEmergencyService!);
+        await _confirmEmergency();
         break;
       case 'ACTION_CANCEL':
-        debugPrint('Notification Service: Usuário cancelou emergência');
-        _cancelEmergency();
+        await _cancelEmergency();
         break;
       default:
-        // Se não há ação específica, tratar como confirmação
-        debugPrint('Notification Service: Ação não reconhecida - confirmando emergência');
-        _confirmEmergency(_currentCallId!, _currentToken!, _currentLocationService!, _currentEmergencyService!);
+        // Se o usuário tocar no corpo da notificação, a trava _actionTaken
+        // será ativada, mas nenhuma ação será executada. O timeout continuará.
+        // Para corrigir isso, resetamos a trava se a ação for desconhecida.
+        _actionTaken = false;
         break;
     }
   }
 
-  // Variáveis para armazenar contexto da emergência atual
-  int? _currentCallId;
-  String? _currentToken;
-  LocationService? _currentLocationService;
-  EmergencyService? _currentEmergencyService;
-
-  Future<void> _confirmEmergency(int callId, String token, LocationService locationService, EmergencyService emergencyService) async {
+  Future<void> _confirmEmergency() async {
+    if (_currentCallId == null || _currentToken == null || _locationService == null || _emergencyService == null) {
+      return;
+    }
+    
     try {
-      debugPrint('Notification Service: Confirmando emergência - Call ID: $callId');
-      
-      // Iniciar compartilhamento de localização em background
-      await locationService.startBackgroundLocationSharing(
-        callId: callId,
+      await _locationService!.startBackgroundLocationSharing(
+        callId: _currentCallId!,
         onLocationUpdate: (latitude, longitude) async {
-          await emergencyService.updateLocation(
-            token,
+          await _emergencyService!.updateLocation(
+            _currentToken!,
             latitude,
             longitude,
           );
         },
         onError: (error) {
           if (error.contains('400')) {
-            // Parar compartilhamento se receber erro 400
-            locationService.stopBackgroundLocationSharing();
-            debugPrint('Notification Service: Parando compartilhamento devido a erro 400');
+            _locationService!.stopBackgroundLocationSharing();
           }
         },
       );
-      
-      debugPrint('Notification Service: Emergência confirmada e localização iniciada');
     } catch (e) {
       debugPrint('Notification Service: Erro ao confirmar emergência: $e');
     }
   }
 
-  void _cancelEmergency() {
-    debugPrint('Notification Service: Emergência cancelada pelo usuário');
-    // Limpar notificação
-    _notifications.cancel(0);
+  Future<void> _cancelEmergency() async {
+    debugPrint('Notification Service: Emergência cancelada pelo usuário.');
   }
 
   // Mostrar notificação de status
@@ -284,4 +252,4 @@ class NotificationService {
     _timeoutTimer?.cancel();
     _countdownTimer?.cancel();
   }
-} 
+}

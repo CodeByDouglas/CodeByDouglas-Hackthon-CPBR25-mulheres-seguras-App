@@ -16,7 +16,7 @@ class EmergencyResponse {
       success: json['success'] ?? false,
       callId: json['call_id'],
       message: json['message'] ?? 'Resposta do servidor',
-      smsErrors: json['sms_errors'] != null 
+      smsErrors: json['sms_errors'] != null
           ? List<String>.from(json['sms_errors'])
           : null,
     );
@@ -35,4 +35,4 @@ class EmergencyResponse {
   String toString() {
     return 'EmergencyResponse(success: $success, callId: $callId, message: $message, smsErrors: $smsErrors)';
   }
-} 
+}

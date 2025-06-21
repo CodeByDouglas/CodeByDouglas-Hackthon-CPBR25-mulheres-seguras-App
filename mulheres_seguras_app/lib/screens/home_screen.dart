@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -34,28 +35,28 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _initializeApp() async {
     final provider = context.read<EmergencyProvider>();
-    
+
     try {
       // Verificar disponibilidade dos serviços
       final nfcAvailable = await widget.nfcService.isAvailable();
       final locationAvailable = await widget.locationService.isAvailable();
-      final notificationAvailable = await widget.notificationService.isAvailable();
-      
+      final notificationAvailable = await widget.notificationService
+          .isAvailable();
+
       provider.setNfcAvailable(nfcAvailable);
       provider.setLocationAvailable(locationAvailable);
       provider.setNotificationAvailable(notificationAvailable);
-      
+
       // Configurar token padrão
       provider.setUserToken('tokendouser123');
-      
+
       // Iniciar monitoramento de NFC
       if (nfcAvailable) {
         await _startNfcMonitoring();
       }
-      
+
       // Solicitar permissões
       await _requestPermissions();
-      
     } catch (e) {
       print('Erro na inicialização: $e');
       // Em caso de erro, definir como disponível para simulação
@@ -112,7 +113,8 @@ class _HomeScreenState extends State<HomeScreen> {
         provider.activateEmergency(token, 999);
       }
     } catch (e) {
-      provider.activateEmergency(token, 999);
+      // O erro já é tratado nos serviços individuais,
+      // este catch previne que o app quebre em caso de falha inesperada.
     }
   }
 
@@ -142,6 +144,15 @@ class _HomeScreenState extends State<HomeScreen> {
     widget.locationService.stopBackgroundLocationSharing();
   }
 
+  // --- Funções de Teste (apenas para desenvolvimento) ---
+
+  void _simulateNfcDetection() {
+    // Simula a detecção de uma tag NFC com um token de teste
+    widget.nfcService.simulateNfcDetection();
+  }
+
+  // --- Widgets de UI ---
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -162,26 +173,26 @@ class _HomeScreenState extends State<HomeScreen> {
                 Icon(
                   Icons.security,
                   size: 100,
-                  color: emergencyProvider.isEmergencyActive 
-                      ? Colors.red 
+                  color: emergencyProvider.isEmergencyActive
+                      ? Colors.red
                       : Colors.grey,
                 ),
                 const SizedBox(height: 24),
-                
+
                 // Status do app
                 Text(
-                  emergencyProvider.isEmergencyActive 
-                      ? 'EMERGÊNCIA ATIVA' 
+                  emergencyProvider.isEmergencyActive
+                      ? 'EMERGÊNCIA ATIVA'
                       : 'Monitoramento Ativo',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: emergencyProvider.isEmergencyActive 
-                        ? Colors.red 
+                    color: emergencyProvider.isEmergencyActive
+                        ? Colors.red
                         : Colors.green,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Descrição
                 Text(
                   emergencyProvider.isEmergencyActive
@@ -191,7 +202,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
                 const SizedBox(height: 32),
-                
+
                 // Botão de teste
                 if (!emergencyProvider.isEmergencyActive)
                   ElevatedButton.icon(
@@ -205,9 +216,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       foregroundColor: Colors.white,
                     ),
                   ),
-                
+
                 const SizedBox(height: 24),
-                
+
                 // Informações do status
                 Card(
                   child: Padding(
@@ -215,29 +226,41 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Column(
                       children: [
                         _buildStatusItem(
-                          'NFC', 
-                          emergencyProvider.isNfcAvailable ? 'Disponível' : 'Indisponível',
-                          emergencyProvider.isNfcAvailable ? Colors.green : Colors.red,
+                          'NFC',
+                          emergencyProvider.isNfcAvailable
+                              ? 'Disponível'
+                              : 'Indisponível',
+                          emergencyProvider.isNfcAvailable
+                              ? Colors.green
+                              : Colors.red,
                         ),
                         const SizedBox(height: 8),
                         _buildStatusItem(
-                          'Localização', 
-                          emergencyProvider.isLocationAvailable ? 'Disponível' : 'Indisponível',
-                          emergencyProvider.isLocationAvailable ? Colors.green : Colors.red,
+                          'Localização',
+                          emergencyProvider.isLocationAvailable
+                              ? 'Disponível'
+                              : 'Indisponível',
+                          emergencyProvider.isLocationAvailable
+                              ? Colors.green
+                              : Colors.red,
                         ),
                         const SizedBox(height: 8),
                         _buildStatusItem(
-                          'Notificações', 
-                          emergencyProvider.isNotificationAvailable ? 'Disponível' : 'Indisponível',
-                          emergencyProvider.isNotificationAvailable ? Colors.green : Colors.red,
+                          'Notificações',
+                          emergencyProvider.isNotificationAvailable
+                              ? 'Disponível'
+                              : 'Indisponível',
+                          emergencyProvider.isNotificationAvailable
+                              ? Colors.green
+                              : Colors.red,
                         ),
                       ],
                     ),
                   ),
                 ),
-                
+
                 const SizedBox(height: 24),
-                
+
                 // Informações adicionais
                 if (emergencyProvider.isEmergencyActive) ...[
                   Card(
@@ -248,10 +271,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Text(
                             'Chamado Ativo',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: Colors.red,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.bold,
+                                ),
                           ),
                           const SizedBox(height: 8),
                           Text(
@@ -269,9 +293,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-                  
+
                   const SizedBox(height: 16),
-                  
+
                   ElevatedButton.icon(
                     onPressed: () {
                       _cancelEmergency();
@@ -284,9 +308,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ],
-                
+
                 const SizedBox(height: 32),
-                
+
                 // Informação sobre funcionalidades
                 Card(
                   color: Colors.green.shade50,
@@ -296,10 +320,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Text(
                           'Funcionalidades Ativas',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: Colors.green,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: Colors.green,
+                                fontWeight: FontWeight.bold,
+                              ),
                         ),
                         const SizedBox(height: 8),
                         const Text(
@@ -320,6 +345,14 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         },
       ),
+      floatingActionButton: kDebugMode
+          ? FloatingActionButton(
+              heroTag: 'nfc_simulate',
+              onPressed: _simulateNfcDetection,
+              tooltip: 'Simular Detecção NFC',
+              child: const Icon(Icons.nfc),
+            )
+          : null,
     );
   }
 
@@ -335,4 +368,4 @@ class _HomeScreenState extends State<HomeScreen> {
       ],
     );
   }
-} 
+}

@@ -68,11 +68,11 @@ class EmergencyProvider extends ChangeNotifier {
   // Simular envio de localização
   Future<bool> sendLocationUpdate() async {
     if (!_isEmergencyActive) return false;
-    
+
     // Simular delay de rede
     await Future.delayed(const Duration(seconds: 1));
-    
+
     // Simular sucesso
     return true;
   }
-} 
+}

@@ -8,7 +8,7 @@ class LocationService {
   bool _isInitialized = false;
   bool _isLocationSharing = false;
   Position? _lastKnownPosition;
-  
+
   // Configurações de localização
   static const LocationAccuracy _accuracy = LocationAccuracy.high;
   static const Duration _updateInterval = Duration(seconds: 10);
@@ -20,11 +20,11 @@ class LocationService {
     try {
       // Verificar permissões
       bool hasPermission = await _checkLocationPermission();
-      
+
       if (hasPermission) {
         _isInitialized = true;
         debugPrint('Location Service: Inicializado com sucesso');
-        
+
         // Obter localização inicial
         await _getCurrentLocation();
       } else {
@@ -45,7 +45,7 @@ class LocationService {
 
     // Verificar permissões
     LocationPermission permission = await Geolocator.checkPermission();
-    
+
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
@@ -55,7 +55,9 @@ class LocationService {
     }
 
     if (permission == LocationPermission.deniedForever) {
-      debugPrint('Location Service: Permissões de localização negadas permanentemente');
+      debugPrint(
+        'Location Service: Permissões de localização negadas permanentemente',
+      );
       return false;
     }
 
@@ -71,21 +73,37 @@ class LocationService {
     if (!_isInitialized) {
       await initialize();
     }
-
     return await _getCurrentLocation();
   }
 
   Future<Position?> _getCurrentLocation() async {
     try {
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: _accuracy,
-        timeLimit: const Duration(seconds: 10),
-      );
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        debugPrint('Location Service: Serviço de localização desabilitado.');
+        return null;
+      }
 
-      _lastKnownPosition = position;
-      debugPrint('Location Service: Localização obtida - ${position.latitude}, ${position.longitude}');
-      
-      return position;
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          debugPrint('Location Service: Permissão de localização negada.');
+          return null;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        debugPrint('Location Service: Permissão de localização negada permanentemente.');
+        return null;
+      }
+
+      return await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 100,
+        ),
+      );
     } catch (e) {
       debugPrint('Location Service: Erro ao obter localização: $e');
       return null;
@@ -99,20 +117,23 @@ class LocationService {
       _isLocationSharing = true;
       debugPrint('Location Service: Iniciando compartilhamento de localização');
 
-      _locationSubscription = Geolocator.getPositionStream(
-        locationSettings: LocationSettings(
-          accuracy: _accuracy,
-          distanceFilter: _minDistance,
-          timeLimit: _updateInterval,
-        ),
-      ).listen(
-        (Position position) {
-          _onLocationUpdate(position);
-        },
-        onError: (error) {
-          debugPrint('Location Service: Erro no stream de localização: $error');
-        },
-      );
+      _locationSubscription =
+          Geolocator.getPositionStream(
+            locationSettings: LocationSettings(
+              accuracy: _accuracy,
+              distanceFilter: _minDistance,
+              timeLimit: _updateInterval,
+            ),
+          ).listen(
+            (Position position) {
+              _onLocationUpdate(position);
+            },
+            onError: (error) {
+              debugPrint(
+                'Location Service: Erro no stream de localização: $error',
+              );
+            },
+          );
     } catch (e) {
       debugPrint('Location Service: Erro ao iniciar compartilhamento: $e');
       _isLocationSharing = false;
@@ -127,8 +148,10 @@ class LocationService {
 
   void _onLocationUpdate(Position position) {
     _lastKnownPosition = position;
-    debugPrint('Location Service: Nova localização - ${position.latitude}, ${position.longitude}');
-    
+    debugPrint(
+      'Location Service: Nova localização - ${position.latitude}, ${position.longitude}',
+    );
+
     // Aqui você pode implementar o envio da localização para o backend
     // Por exemplo, chamar EmergencyService().sendLocationUpdate(position);
   }
@@ -165,7 +188,9 @@ class LocationService {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       LocationPermission permission = await Geolocator.checkPermission();
-      return serviceEnabled && permission != LocationPermission.denied && permission != LocationPermission.deniedForever;
+      return serviceEnabled &&
+          permission != LocationPermission.denied &&
+          permission != LocationPermission.deniedForever;
     } catch (e) {
       debugPrint('Location Service: Erro ao verificar disponibilidade: $e');
       return false;
@@ -199,24 +224,29 @@ class LocationService {
       _isLocationSharing = true;
       debugPrint('Location Service: Iniciando compartilhamento em background');
 
-      _locationSubscription = Geolocator.getPositionStream(
-        locationSettings: LocationSettings(
-          accuracy: _accuracy,
-          distanceFilter: _minDistance,
-          timeLimit: _updateInterval,
-        ),
-      ).listen(
-        (Position position) {
-          _lastKnownPosition = position;
-          onLocationUpdate(position.latitude, position.longitude);
-        },
-        onError: (error) {
-          debugPrint('Location Service: Erro no stream de localização: $error');
-          onError(error.toString());
-        },
-      );
+      _locationSubscription =
+          Geolocator.getPositionStream(
+            locationSettings: LocationSettings(
+              accuracy: _accuracy,
+              distanceFilter: _minDistance,
+              timeLimit: _updateInterval,
+            ),
+          ).listen(
+            (Position position) {
+              _lastKnownPosition = position;
+              onLocationUpdate(position.latitude, position.longitude);
+            },
+            onError: (error) {
+              debugPrint(
+                'Location Service: Erro no stream de localização: $error',
+              );
+              onError(error.toString());
+            },
+          );
     } catch (e) {
-      debugPrint('Location Service: Erro ao iniciar compartilhamento em background: $e');
+      debugPrint(
+        'Location Service: Erro ao iniciar compartilhamento em background: $e',
+      );
       _isLocationSharing = false;
       onError(e.toString());
     }
@@ -246,4 +276,4 @@ class LocationService {
     stopLocationSharing();
     _locationSubscription?.cancel();
   }
-} 
+}
