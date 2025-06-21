@@ -1,0 +1,36 @@
+gradle-wrapper.jar
+/.gradle
+/captures/
+/gradlew
+/gradlew.bat
+/local.properties
+GeneratedPluginRegistrant.java
+.cxx/
+
+# Remember to never publicly share your keystore.
+# See https://flutter.dev/to/reference-keystore
+key.properties
+**/*.keystore
+**/*.jks
+
+# Miscellaneous
+.DS_Store
+.idea/
+.vscode/
+
+# Build artifacts
+build/
+.cxx/
+
+# Gradle files
+.gradle/
+*.iml
+
+# Local properties
+local.properties
+
+# Log files
+*.log
+
+# Heap dump files
+*.hprof
